@@ -241,12 +241,44 @@ impl Runtime {
             })
             .build();
 
-        Ok(Runtime {
+        Ok(Runtime::create(reactor, pool))
+    }
+
+    /// Create a new runtime instance with specific thread-pool size.
+    ///
+    /// See [module level][mod] documentation for more details.
+    ///
+    /// [mod]: index.html
+    pub fn with_pool_size(pool_size: usize) -> io::Result<Self> {
+        // Spawn a reactor on a background thread.
+        let reactor = Reactor::new()?.background()?;
+
+        // Get a handle to the reactor.
+        let handle = reactor.handle().clone();
+
+        let pool = threadpool::Builder::new()
+            .around_worker(move |w, enter| {
+                ::tokio_reactor::with_default(&handle, enter, |_| {
+                    w.run();
+                });
+            })
+            .pool_size(pool_size)
+            .build();
+        Ok(Runtime::create(reactor, pool))
+    }
+
+    /// Create a new runtime instance based on a reactor and threadpool.
+    ///
+    /// See [module level][mod] documentation for more details.
+    ///
+    /// [mod]: index.html
+    pub fn create(reactor: Background, pool: ThreadPool) -> Self {
+        Runtime {
             inner: Some(Inner {
                 reactor,
                 pool,
             }),
-        })
+        }
     }
 
     /// Return a reference to the reactor handle for this runtime instance.
